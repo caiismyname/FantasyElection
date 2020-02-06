@@ -5,6 +5,12 @@ const Firebase = require('firebase/app');
 require('firebase/database');
 const uuidv4 = require('uuid/v4');
 
+const starterGameState = {
+  onlinePlayers: {},
+  readyPlayers: {},
+  draftStarted: false,
+}
+
 class FirebaseManager {
   constructor() {
     const firebaseConfig = {
@@ -23,17 +29,50 @@ class FirebaseManager {
   createNewGame(players) {
     const id = uuidv4();
     Firebase.database().ref("/games/" + id + "/players").set({...players});
+
+    const populatedGameState = {...starterGameState};
+    for (let idx in players) {
+      populatedGameState.onlinePlayers[idx] = false;
+      populatedGameState.readyPlayers[idx] = false;
+    }
+
+    Firebase.database().ref("/games/" + id + "/gameState").set({...populatedGameState});
+    
     return (id);
   }
 
   checkGameId(gameId, successCallback, failureCallback) {
     Firebase.database().ref("/games/" + gameId).once('value').then(function(snapshot) {
-      if (snapshot.val() != null) {
+      if (snapshot.exists()) {
         successCallback();
       } else {
         failureCallback();
       }
     });
+  }
+
+  pullGameUsers(gameId, callback) {
+    Firebase.database()
+      .ref("/games/" + gameId + "/players").once('value')
+      .then((snapshot) => callback(snapshot.val()));
+  }
+
+  subscribeToGameState(gameId, callback) {
+    Firebase.database().ref("/games/" + gameId + "/gameState").on('value', (snapshot) => {
+      callback(snapshot.val());
+    })
+  }
+
+  playerIsOnline(gameId, playerIdx) {
+    Firebase.database()
+      .ref("/games/" + gameId + "/gameState/onlinePlayers/" + playerIdx)
+      .set(true);
+  }
+
+  playerIsReady(gameId, playerIdx) {
+    Firebase.database()
+      .ref("/games/" + gameId + "/gameState/readyPlayers/" + playerIdx)
+      .set(true);
   }
 }
 
@@ -121,6 +160,80 @@ class GameIdSubmission extends React.Component {
   }
 }
 
+class PlayerSelector extends React.Component {
+
+  render() {
+    const playerSelectors = [];
+    for (let playerIdx in this.props.players) {
+      const entry = 
+        <div 
+          key={playerIdx}
+          style={{border:"1px solid black", background:"light-gray", margin:"10px 0px"}}
+          onClick={() => this.props.playerSelectedHandler(playerIdx)}
+        >
+          {this.props.players[playerIdx]}
+        </div>
+      playerSelectors.push(entry);
+    }
+
+    return (playerSelectors);
+  }
+}
+
+class Draft extends React.Component {
+
+  render() {
+    if (this.props.selfIdx === "") {
+      return (
+        <div>
+          <h1>Welcome to the game</h1>
+          <h3>Your Game ID is {this.props.gameId}</h3>
+          <PlayerSelector 
+            players={this.props.players}
+            playerSelectedHandler={(playerIdx) => this.props.playerSelectedHandler(playerIdx)}
+          />
+        </div>
+      );
+    } else {
+      if (this.props.gameState.readyPlayers[this.props.selfIdx]) {
+        const notReady = [];
+
+        for (let idx in this.props.players) {
+          if (!this.props.gameState.readyPlayers[idx]) {
+            notReady.push(<li>{this.props.players[idx]}</li>);
+          }
+        }
+
+        let waitingOnPeople = null;
+        if (notReady.length != 0) {
+          waitingOnPeople = 
+            <div>
+              <h2>Still missing:</h2>
+              <ul>
+                {notReady}
+              </ul>
+            </div>
+        }
+
+
+        return (
+          <div>
+            <h1>{this.props.selfName}, you have entered the draft, which will start once everyone joins.</h1>
+            {waitingOnPeople}
+          </div>
+        );
+      } else {
+        return (
+          <div>
+            <h1> Welcome to the draft {this.props.selfName}. Get ready to beat Trump</h1>
+            <button onClick={() => this.props.playerReadyHandler()}>Ready</button>
+          </div>
+        );
+      }
+    }
+  }
+}
+
 class App extends React.Component {
   constructor(props) {
     super(props);
@@ -129,22 +242,28 @@ class App extends React.Component {
     this.changePlayerName = this.changePlayerName.bind(this);
     this.createNewGame = this.createNewGame.bind(this);
     this.checkAndSetGameId = this.checkAndSetGameId.bind(this);
+    this.playerSelectedHandler = this.playerSelectedHandler.bind(this);
 
     this.state = {
       gameId: "",
-      gameState: {
-        allPlayersOnline: false,
-        allPlayersReady: false,
-        draftStarted: false,
-      },
+      gameState: {starterGameState},
       players: {
         0: "",
         1: "",
       },
       firebaseManager: new FirebaseManager(),
+      dbConnectionStarted: false,
+      selfIdx: "",
+      selfName: "",
     }
   }
 
+  componentDidUpdate() {
+    if (!this.state.dbConnectionStarted && this.state.gameId !== "") {
+      this.startDBConnection(); 
+    }
+  }
+ 
   checkAndSetGameId(gameId) {
     this.state.firebaseManager.checkGameId(
       gameId,
@@ -171,6 +290,33 @@ class App extends React.Component {
     this.setState({gameId: gameId});
   }
 
+  startDBConnection() {
+    if (this.state.dbConnectionStarted) {
+      return;
+    }
+
+    // Get users from firebase
+    this.state.firebaseManager.pullGameUsers(this.state.gameId, (players) => {
+      this.setState({players: players})
+    })
+
+    // Connect FB listeners with React state
+    this.state.firebaseManager.subscribeToGameState(this.state.gameId, (newGameState) => {
+      this.setState({gameState: {...newGameState}});
+    });
+
+    this.setState({dbConnectionStarted: true});
+  }
+
+  playerSelectedHandler(playerIdx) {
+    this.setState({selfIdx: playerIdx, selfName: this.state.players[playerIdx]});
+    this.state.firebaseManager.playerIsOnline(this.state.gameId, playerIdx);
+  }
+
+  playerReadyHandler() {
+    this.state.firebaseManager.playerIsReady(this.state.gameId, this.state.selfIdx);
+  }
+
   render() {
     let component; 
 
@@ -184,7 +330,16 @@ class App extends React.Component {
           players={this.state.players}
         />;
     } else {
-      component = <h1>Here's the game</h1>;
+      component = 
+        <Draft
+          gameId={this.state.gameId}
+          selfName={this.state.selfName}
+          selfIdx={this.state.selfIdx}
+          playerSelectedHandler={(playerIdx) => this.playerSelectedHandler(playerIdx)}
+          playerReadyHandler={() => this.playerReadyHandler()}
+          gameState={this.state.gameState}
+          players={this.state.players}
+        />;
     }
     return (
       <div className="App" style={{width: "50%", margin: "0 auto"}}>
