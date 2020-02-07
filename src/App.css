@@ -1,6 +1,8 @@
 .App {
   text-align: center;
   font-family: avenir;
+  max-width: 1500px;
+  margin: 0 auto;
 }
 
 .App-logo {
@@ -19,7 +21,7 @@
   font-size: calc(10px + 1vmin);
   color: white;
   padding: 1vh;
-  
+
 }
 
 .Container {
