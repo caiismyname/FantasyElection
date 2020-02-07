@@ -149,21 +149,27 @@ class OnboardingPage extends React.Component {
   render() {
     return (
       <div>
-        <h1>Welcome to Fantasy Elections: Democratic Primaries 2020</h1>
-        <PlayerEntry 
-          players={this.props.players}
-          addNewPlayerHandler={() => this.props.addNewPlayerHandler()}
-          changePlayerNameHandler={(idx, value) => this.props.changePlayerNameHandler(idx, value)}
-        />
-        <button 
-          onClick={() => this.props.createNewGameHandler()}
-          style={{margin:"50px 0"}}
-        >
-          Create Game
-        </button>
-        <GameIdSubmission 
-          joinGameHandler={(gameId) => this.props.joinGameHandler(gameId)}
-        />
+        <h1>Welcome to Fantasy Elections</h1>
+        <h2><i>Democratic Primaries 2020</i></h2>
+        <div className="BoundingBox">
+          <PlayerEntry 
+            players={this.props.players}
+            addNewPlayerHandler={() => this.props.addNewPlayerHandler()}
+            changePlayerNameHandler={(idx, value) => this.props.changePlayerNameHandler(idx, value)}
+          />
+          <div style={{height:"30px"}}></div>
+          <button 
+            onClick={() => this.props.createNewGameHandler()}
+            style={{margin:"0 auto", width: "33%"}}
+          >
+            Create Game
+          </button>
+
+          <p>-- or --</p>
+          <GameIdSubmission 
+            joinGameHandler={(gameId) => this.props.joinGameHandler(gameId)}
+          />
+        </div>
       </div>
     );
   }
@@ -180,10 +186,11 @@ class PlayerEntry extends React.Component {
     for (let playerIdx in this.props.players) {
       const field = 
         <textarea 
-          style={{border: "1px solid black", width:"100%"}}
+          style={{border: "1px solid black", width:"100%", fontSize:"1.5vmin", height:"2vmin", resize:"none"}}
           value={this.props.players[playerIdx]}
           onChange={event => {this.props.changePlayerNameHandler(playerIdx, event.target.value)}}
           key={playerIdx}
+          placeholder={"Player " + (Number(playerIdx) + 1)}
         />;
       playerFields.push(field);
     }
@@ -193,8 +200,9 @@ class PlayerEntry extends React.Component {
         {playerFields}
         <div 
           onClick={this.props.addNewPlayerHandler} 
+          style={{float:"left", display:"inline-block", cursor:"grab"}}
         >
-          Add new Player
+          Add new player
         </div>
       </div>
     );
@@ -221,7 +229,7 @@ class GameIdSubmission extends React.Component {
           placeholder="Enter Game ID to join an existing game"
           style={{border: "1px solid black", width:"100%"}}
           value={this.state.value}
-          onChange={event => {this.setState({value: event.target.value})}}
+          onChange={event => {this.setState({value: event.target.value.trim()})}}
         />
         {button}
       </div>
@@ -244,7 +252,7 @@ class PlayerSelector extends React.Component {
       const entry = 
         <div 
           key={playerIdx}
-          style={{border:"1px solid black", background:"light-gray", margin:"10px 0px"}}
+          style={{border:"1px solid black", background:"light-gray", marginBottom: "2vh", cursor:"grab"}}
           onClick={() => this.props.playerSelectedHandler(playerIdx)}
         >
           {this.props.players[playerIdx]}
@@ -252,7 +260,12 @@ class PlayerSelector extends React.Component {
       playerSelectors.push(entry);
     }
 
-    return (playerSelectors);
+    return (
+      <div className="BoundingBox">
+        <h2>Select a player</h2>
+        {playerSelectors}
+      </div>
+    );
   }
 }
 
@@ -263,8 +276,9 @@ class PreDraft extends React.Component {
     if (this.props.selfIdx === "") {
       return (
         <div>
-          <h1>Welcome to the game</h1>
-          <h3>Your Game ID is {this.props.gameId}</h3>
+          <h1>Let's get started</h1>
+          <h3>Your Game ID is <span style={{backgroundColor:"#F7FAFC", padding: "5px"}}>{this.props.gameId}</span></h3>
+          <h3>Share it with your friends so they can join the draft.</h3>
           <PlayerSelector 
             players={this.props.players}
             onlinePlayers={this.props.gameState.onlinePlayers}
@@ -276,8 +290,11 @@ class PreDraft extends React.Component {
     } else if (!this.props.gameState.readyPlayers[this.props.selfIdx]) {
       return (
         <div>
-          <h1> Welcome to the draft {this.props.players[this.props.selfIdx]}. Get ready to beat Trump</h1>
-          <button onClick={() => this.props.playerReadyHandler()}>Ready</button>
+          <h1> Welcome to the draft, {this.props.players[this.props.selfIdx]}</h1>
+          <div className="BoundingBox">
+            <h3>When you're ready, click the button below to enter the draft. Once you enter, you cannot exit.</h3>
+            <button onClick={() => this.props.playerReadyHandler()}>Ready</button>
+          </div>
         </div>
       );
     } else {
@@ -285,7 +302,7 @@ class PreDraft extends React.Component {
 
       for (let idx in this.props.players) {
         if (!this.props.gameState.readyPlayers[idx]) {
-          notReady.push(<li key={idx}>{this.props.players[idx]}</li>);
+          notReady.push(<div key={idx}>{this.props.players[idx]}</div>);
         }
       }
 
@@ -293,11 +310,12 @@ class PreDraft extends React.Component {
       if (notReady.length != 0) {
         return (
           <div>
-            <h1>{this.props.players[this.props.selfIdx]}, you have entered the draft, which will start once everyone joins.</h1>
-            <h2>Still missing:</h2>
-            <ul>
+            <h1>{this.props.players[this.props.selfIdx]}, you have entered the draft.</h1>
+            <div className="BoundingBox">
+              <h3>The draft will start once all players have joined.</h3>
+              <h3>Still missing:</h3>
               {notReady}
-            </ul>
+            </div>
           </div>
         );
       } else {
@@ -533,8 +551,15 @@ class App extends React.Component {
           />;
     }
     return (
-      <div className="App" style={{width: "50%", margin: "0 auto"}}>
-        {component}
+      <div className="App">
+        <div className="Header">
+          <b onClick={() => this.setState({gameId: ""})} style={{cursor:"grab"}}>Fantasy Elections:</b> Because This Reality Won't Cut It
+        </div>
+        {this.state.gameId === "" ? <img src={require("./homepageBanner.jpg")} className="HomepageBanner"></img> : null}
+        <div className="Container">
+          
+          {component}
+        </div>
       </div>
     );
   }
