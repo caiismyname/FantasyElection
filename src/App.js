@@ -223,8 +223,15 @@ class GameIdSubmission extends React.Component {
 class PlayerSelector extends React.Component {
 
   render() {
+    const availablePlayers = {};
+    for (let idx in this.props.players) {
+      if (!this.props.readyPlayers[idx]) {
+        availablePlayers[idx] = this.props.players[idx];
+      }
+    }
+    
     const playerSelectors = [];
-    for (let playerIdx in this.props.players) {
+    for (let playerIdx in availablePlayers) {
       const entry = 
         <div 
           key={playerIdx}
@@ -240,70 +247,78 @@ class PlayerSelector extends React.Component {
   }
 }
 
-class Draft extends React.Component {
+class PreDraft extends React.Component {
 
   render() {
     // If no player has been selected, pick a player
     if (this.props.selfIdx === "") {
-      const availablePlayers = {};
-      for (let idx in this.props.players) {
-        if (!this.props.gameState.readyPlayers[idx]) {
-          availablePlayers[idx] = this.props.players[idx];
-        }
-      }
       return (
         <div>
           <h1>Welcome to the game</h1>
           <h3>Your Game ID is {this.props.gameId}</h3>
           <PlayerSelector 
-            players={availablePlayers}
+            players={this.props.players}
+            readyPlayers={this.props.gameState.readyPlayers}
             playerSelectedHandler={(playerIdx) => this.props.playerSelectedHandler(playerIdx)}
           />
         </div>
       );
+     // Once a player is picked, wait for the user to confirm they're ready 
+    } else if (!this.props.gameState.readyPlayers[this.props.selfIdx]) {
+      return (
+        <div>
+          <h1> Welcome to the draft {this.props.selfName}. Get ready to beat Trump</h1>
+          <button onClick={() => this.props.playerReadyHandler()}>Ready</button>
+        </div>
+      );
     } else {
-      // Once a player is picked, wait for the user to confirm they're ready
-      if (!this.props.gameState.readyPlayers[this.props.selfIdx]) {
+      const notReady = [];
+
+      for (let idx in this.props.players) {
+        if (!this.props.gameState.readyPlayers[idx]) {
+          notReady.push(<li key={idx}>{this.props.players[idx]}</li>);
+        }
+      }
+
+      // If we're still waiting on players to join, show a holding screen
+      if (notReady.length != 0) {
         return (
           <div>
-            <h1> Welcome to the draft {this.props.selfName}. Get ready to beat Trump</h1>
-            <button onClick={() => this.props.playerReadyHandler()}>Ready</button>
+            <h1>{this.props.selfName}, you have entered the draft, which will start once everyone joins.</h1>
+            <h2>Still missing:</h2>
+            <ul>
+              {notReady}
+            </ul>
           </div>
         );
+      // Everyone is ready, so start the draft!
       } else {
-        const notReady = [];
-
-        for (let idx in this.props.players) {
-          if (!this.props.gameState.readyPlayers[idx]) {
-            notReady.push(<li key={idx}>{this.props.players[idx]}</li>);
-          }
-        }
-        
-        let component;
-
-        // If we're still waiting, show a holding screen
-        if (notReady.length != 0) {
-          component = 
-            <div>
-              <h1>{this.props.selfName}, you have entered the draft, which will start once everyone joins.</h1>
-              <h2>Still missing:</h2>
-              <ul>
-                {notReady}
-              </ul>
-            </div>;
-        } else {
-          if (this.props.draftState.draftOrder[this.props.draftState.currentDraftPosition] == this.props.selfIdx) {
-            component = <div><h1>It your turn!</h1></div>;
-          } else {
-            component = <div><h1>It {this.props.players[this.props.draftState.currentDraftPosition]} turn</h1></div>;
-          }
-        }
-
         return (
-          component
+          <div>
+            <Draft 
+              draftState={this.props.draftState}
+              players={this.props.players}
+              selfIdx={this.props.selfIdx}
+            />
+          </div>
         );
       }
     }
+  }
+}
+
+class Draft extends React.Component {
+
+  render() {
+    let component;
+
+    if (this.props.draftState.draftOrder[this.props.draftState.currentDraftPosition] == this.props.selfIdx) {
+      component = <div><h1>It your turn!</h1></div>;
+    } else {
+      component = <div><h1>It {this.props.players[this.props.draftState.currentDraftPosition]} turn</h1></div>;
+    }
+
+    return(component);
   }
 }
 
@@ -426,7 +441,7 @@ class App extends React.Component {
         />;
     } else {
       component = 
-        <Draft
+        <PreDraft
           gameId={this.state.gameId}
           selfName={this.state.selfName}
           selfIdx={this.state.selfIdx}
