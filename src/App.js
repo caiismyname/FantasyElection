@@ -8,15 +8,15 @@ const uuidv4 = require('uuid/v4');
 const starterGameState = {
   onlinePlayers: {},
   readyPlayers: {},
-  draftStarted: false,
+  draftCompleted: false, // This is not meant to control the draft. It is used for checks incase the game is visited after the draft is completed
 }
 
 const starterDraftState = {
   draftOrder: {}, // FB doesn't store lists natively.
-  currentDraftPosition: "",
+  currentDraftPosition: 0,
 }
 
-const draftRounds = 8; // must be even for snake
+const draftRounds = 2; // must be even for snake
 
 function shuffle(array) {
   var currentIndex = array.length, temporaryValue, randomIndex;
@@ -52,6 +52,16 @@ class FirebaseManager {
       Firebase.initializeApp(firebaseConfig);
   }
 
+  checkGameId(gameId, successCallback, failureCallback) {
+    Firebase.database().ref("/games/" + gameId).once('value').then(function(snapshot) {
+      if (snapshot.exists()) {
+        successCallback();
+      } else {
+        failureCallback();
+      }
+    });
+  }
+
   createNewGame(players) {
     const id = uuidv4();
     Firebase.database().ref("/games/" + id + "/players").set({...players});
@@ -65,16 +75,6 @@ class FirebaseManager {
     Firebase.database().ref("/games/" + id + "/gameState").set({...populatedGameState});
     
     return (id);
-  }
-
-  checkGameId(gameId, successCallback, failureCallback) {
-    Firebase.database().ref("/games/" + gameId).once('value').then(function(snapshot) {
-      if (snapshot.exists()) {
-        successCallback();
-      } else {
-        failureCallback();
-      }
-    });
   }
 
   pullGameUsers(gameId, callback) {
@@ -102,6 +102,7 @@ class FirebaseManager {
   }
 
   startDraft(gameId, numPlayers) {
+    // Generate a draft order
     let forward = [];
     for (let i = 0; i < numPlayers; i++) {
       forward.push(i);
@@ -121,18 +122,26 @@ class FirebaseManager {
     draftState.currentDraftPosition = 0;
 
     Firebase.database()
-      .ref("/games/" + gameId + "/gameState/draftStarted")
-      .set(true);
-
-    Firebase.database()
       .ref("/games/" + gameId + "/draftState/")
       .set({...draftState});
+  }
+
+  endDraft(gameId) {
+    Firebase.database()
+      .ref("/games/" + gameId + "/gameState/draftCompleted") 
+      .set(true);
   }
 
   subscribeToDraftState(gameId, callback) {
     Firebase.database().ref("/games/" + gameId + "/draftState").on('value', (snapshot) => {
       callback(snapshot.val());
     })
+  }
+
+  nextTurn(gameId, nextPosition) {
+    Firebase.database()
+      .ref("/games/" + gameId + "/draftState/currentDraftPosition")
+      .set(nextPosition);
   }
 }
 
@@ -225,7 +234,7 @@ class PlayerSelector extends React.Component {
   render() {
     const availablePlayers = {};
     for (let idx in this.props.players) {
-      if (!this.props.readyPlayers[idx]) {
+      if (!this.props.onlinePlayers[idx]) {
         availablePlayers[idx] = this.props.players[idx];
       }
     }
@@ -258,7 +267,7 @@ class PreDraft extends React.Component {
           <h3>Your Game ID is {this.props.gameId}</h3>
           <PlayerSelector 
             players={this.props.players}
-            readyPlayers={this.props.gameState.readyPlayers}
+            onlinePlayers={this.props.gameState.onlinePlayers}
             playerSelectedHandler={(playerIdx) => this.props.playerSelectedHandler(playerIdx)}
           />
         </div>
@@ -267,7 +276,7 @@ class PreDraft extends React.Component {
     } else if (!this.props.gameState.readyPlayers[this.props.selfIdx]) {
       return (
         <div>
-          <h1> Welcome to the draft {this.props.selfName}. Get ready to beat Trump</h1>
+          <h1> Welcome to the draft {this.props.players[this.props.selfIdx]}. Get ready to beat Trump</h1>
           <button onClick={() => this.props.playerReadyHandler()}>Ready</button>
         </div>
       );
@@ -284,24 +293,15 @@ class PreDraft extends React.Component {
       if (notReady.length != 0) {
         return (
           <div>
-            <h1>{this.props.selfName}, you have entered the draft, which will start once everyone joins.</h1>
+            <h1>{this.props.players[this.props.selfIdx]}, you have entered the draft, which will start once everyone joins.</h1>
             <h2>Still missing:</h2>
             <ul>
               {notReady}
             </ul>
           </div>
         );
-      // Everyone is ready, so start the draft!
       } else {
-        return (
-          <div>
-            <Draft 
-              draftState={this.props.draftState}
-              players={this.props.players}
-              selfIdx={this.props.selfIdx}
-            />
-          </div>
-        );
+        return (null);
       }
     }
   }
@@ -309,16 +309,61 @@ class PreDraft extends React.Component {
 
 class Draft extends React.Component {
 
-  render() {
-    let component;
+  nextTurnHandler() {
+    this.props.nextTurnHandler();
+  }
 
-    if (this.props.draftState.draftOrder[this.props.draftState.currentDraftPosition] == this.props.selfIdx) {
-      component = <div><h1>It your turn!</h1></div>;
-    } else {
-      component = <div><h1>It {this.props.players[this.props.draftState.currentDraftPosition]} turn</h1></div>;
+  isMyTurn() {
+    return this.props.draftState.draftOrder[this.props.draftState.currentDraftPosition] == this.props.selfIdx;
+  }
+
+  render() {
+    let title = this.isMyTurn() ? <h1>It your turn!</h1> : <h1>It {this.props.players[this.props.draftState.draftOrder[this.props.draftState.currentDraftPosition]]} turn</h1>;
+    let nextButton = this.isMyTurn() ? <button onClick={() => this.nextTurnHandler()}>End Turn</button> : null;
+
+    if (this.props.gameState.draftCompleted) {
+      return(<h1>The draft is over</h1>);
     }
 
-    return(component);
+    return(
+      <div>
+        {title}
+        <UpcomingDraftees draftState={this.props.draftState} players={this.props.players}/>
+        {nextButton}
+      </div>
+    );
+  }
+}
+
+class UpcomingDraftees extends React.Component {
+
+  render() {
+    const draftOrder = this.props.draftState.draftOrder;
+    let upcoming = [];
+    for (let position = this.props.draftState.currentDraftPosition; position < draftOrder.length; position++) {
+      const element = 
+        <div 
+          style={{
+            flex:"1", 
+            display:"flex", 
+            overflow:"auto",
+            border:"1px solid black",
+          }}
+          key={position}
+        >
+          {this.props.players[draftOrder[position]]}
+        </div>;
+
+      upcoming.push(element);
+    }
+
+    return(
+      <div
+        style={{display:"flex", "flexDirection":"row", "minHeight": "50px"}}
+      >
+        {upcoming}
+      </div>
+    );
   }
 }
 
@@ -331,6 +376,8 @@ class App extends React.Component {
     this.createNewGame = this.createNewGame.bind(this);
     this.checkAndSetGameId = this.checkAndSetGameId.bind(this);
     this.playerSelectedHandler = this.playerSelectedHandler.bind(this);
+    this.startDraft = this.startDraft.bind(this);
+    this.nextTurnHandler = this.nextTurnHandler.bind(this);
 
     this.state = {
       gameId: "",
@@ -340,8 +387,8 @@ class App extends React.Component {
         1: "",
       },
       firebaseManager: new FirebaseManager(),
-      dbConnectionStarted: false,
-      dbDraftConnectionStarted: false,
+      dbConnectionStarted: false, // This is set locally, not from FB
+      dbDraftConnectionStarted: false, // This also serves as the indicator that the draft has started. This is set locally, not from FB
       draftState: {...starterDraftState},
       selfIdx: "",
       selfName: "",
@@ -354,27 +401,30 @@ class App extends React.Component {
       return;
     }
 
+    // Once we have a gameID, we need to start listening for gameState changes
     if (!this.state.dbConnectionStarted) {
       this.startDBConnection(); 
     }
 
-    let allReady = true && this.state.gameState.readyPlayers.length > 0;
-    for (let idx in this.state.gameState.readyPlayers) {
-      allReady = allReady && this.state.gameState.readyPlayers[idx];
+    // Once everyone is ready, start the draft
+    let allPlayersReady = this.state.gameState.readyPlayers.length > 0;
+    for (let playerIdx in this.state.gameState.readyPlayers) {
+      allPlayersReady = allPlayersReady && this.state.gameState.readyPlayers[playerIdx];
+    }
+    if (allPlayersReady && !this.state.dbDraftConnectionStarted) {
+      this.startDraft();
     }
 
-    if (allReady) {
-      this.state.firebaseManager.startDraft(this.state.gameId, this.state.players.length);
+    // Once draft is started, watch for when the draft ends
+    if (this.draftHasStarted && !this.state.gameState.draftCompleted) {
+      if (this.state.draftState.currentDraftPosition === this.state.draftState.draftOrder.length) {
+        this.endDraft();
+      }
     }
 
-    if (this.state.gameState.draftStarted && !this.state.dbDraftConnectionStarted) {
-      this.state.firebaseManager.subscribeToDraftState(this.state.gameId, (newDraftState) => {
-        this.setState({draftState: {...newDraftState}, dbDraftConnectionStarted: true});
-      });
-    }
   }
  
-  checkAndSetGameId(gameId) {
+  checkAndSetGameId(gameId) { 
     this.state.firebaseManager.checkGameId(
       gameId,
       () => this.setState({gameId: gameId}),
@@ -427,6 +477,31 @@ class App extends React.Component {
     this.state.firebaseManager.playerIsReady(this.state.gameId, this.state.selfIdx);
   }
 
+  startDraft() {
+    // Note: Every client will try and start the draft.
+    // This is how the dbDraftConnectionStarted flag gets set locally.
+    // It's technically a race condition, but since the order is random, it doesn't actually matter.
+
+    this.state.firebaseManager.startDraft(this.state.gameId, this.state.players.length);
+    this.state.firebaseManager.subscribeToDraftState(this.state.gameId, (newDraftState) => {
+      this.setState({draftState: {...newDraftState}, dbDraftConnectionStarted: true});
+    });
+
+    // this.setState({dbDraftConnectionStarted: true});
+  }
+
+  endDraft() {
+    this.state.firebaseManager.endDraft(this.state.gameId);
+  }
+
+  draftHasStarted() {
+    return this.state.dbDraftConnectionStarted;
+  }
+
+  nextTurnHandler() {
+    this.state.firebaseManager.nextTurn(this.state.gameId, this.state.draftState.currentDraftPosition + 1);
+  }
+
   render() {
     let component; 
 
@@ -440,17 +515,22 @@ class App extends React.Component {
           players={this.state.players}
         />;
     } else {
-      component = 
-        <PreDraft
-          gameId={this.state.gameId}
-          selfName={this.state.selfName}
-          selfIdx={this.state.selfIdx}
-          playerSelectedHandler={(playerIdx) => this.playerSelectedHandler(playerIdx)}
-          playerReadyHandler={() => this.playerReadyHandler()}
-          gameState={this.state.gameState}
-          draftState={this.state.draftState}
-          players={this.state.players}
-        />;
+      component = this.draftHasStarted()
+        ? <Draft 
+            draftState={this.state.draftState}
+            gameState={this.state.gameState}
+            players={this.state.players}
+            selfIdx={this.state.selfIdx}
+            nextTurnHandler={() => this.nextTurnHandler()}
+          />
+        : <PreDraft
+            gameId={this.state.gameId}
+            selfIdx={this.state.selfIdx}
+            playerSelectedHandler={(playerIdx) => this.playerSelectedHandler(playerIdx)}
+            playerReadyHandler={() => this.playerReadyHandler()}
+            gameState={this.state.gameState}
+            players={this.state.players}
+          />;
     }
     return (
       <div className="App" style={{width: "50%", margin: "0 auto"}}>
