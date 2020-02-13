@@ -1,6 +1,7 @@
 import React from 'react';
 import './App.css';
 import {apiKey, authDomain, databaseURL, projectId, storageBucket, appId, measurementId} from "./firebaseCredentials";
+import {primaryData} from "./democratic_primary_2020";
 const Firebase = require('firebase/app');
 require('firebase/database');
 const uuidv4 = require('uuid/v4');
@@ -142,6 +143,49 @@ class FirebaseManager {
     Firebase.database()
       .ref("/games/" + gameId + "/draftState/currentDraftPosition")
       .set(nextPosition);
+  }
+
+  initializeAndSubscribeToDraftObjects(gameId, playerIdx, availablePicksCallback, playerPicksCallback) {
+    const blankPicks = {};
+    for (let stateIdx in primaryData.states) {
+      const state = primaryData.states[stateIdx];
+      blankPicks[state.name] = {};
+      for (let candidateIdx in primaryData.candidates) {
+        const candidate = primaryData.candidates[candidateIdx];
+        blankPicks[state.name][candidate] = true;
+      }
+    }
+
+    Firebase.database()
+      .ref("/games/" + gameId + "/availablePicks")
+      .set({...blankPicks});
+
+    Firebase.database()
+      .ref("games/" + gameId + "/availablePicks")
+      .on("value", snapshot => availablePicksCallback(snapshot.val()));
+
+    Firebase.database()
+      .ref("games/" + gameId + "/picksPerPlayer/" + playerIdx)
+      .on("value", snapshot => playerPicksCallback(snapshot.val()));
+  }
+
+  submitPick(gameId, playerIdx, candidate, state, callback) {
+    const queryPath = "/games/" + gameId + "/availablePicks/" + state + "/" + candidate;
+    Firebase.database().ref(queryPath).once('value')
+      .then((snapshot) => {
+        if (snapshot.exists()) {
+          Firebase.database()
+            .ref(queryPath)
+            .remove();
+
+          Firebase.database()
+            .ref("/games/" + gameId + "/picksPerPlayer/" + playerIdx + "/" + state)
+            .set(candidate);
+
+          callback();
+        };
+      });
+    
   }
 }
 
@@ -335,9 +379,28 @@ class Draft extends React.Component {
     return this.props.draftState.draftOrder[this.props.draftState.currentDraftPosition] == this.props.selfIdx;
   }
 
+  generateStatesPerCandidate() {
+    const statesPerCandidate = {};
+
+    for (let candidateIdx in primaryData.candidates) {
+      statesPerCandidate[candidateIdx] = [];
+
+      for (let stateIdx in this.props.availablePicks) {
+        if (this.candidateName(candidateIdx) in this.props.availablePicks[stateIdx]) {
+          statesPerCandidate[candidateIdx].push(stateIdx);
+        }
+      }
+    }
+
+    return (statesPerCandidate);
+  }
+
+  candidateName(idx) {
+    return (primaryData.candidates[idx]);
+  }
+
   render() {
     let title = this.isMyTurn() ? <h1>It your turn!</h1> : <h1>It {this.props.players[this.props.draftState.draftOrder[this.props.draftState.currentDraftPosition]]} turn</h1>;
-    let nextButton = this.isMyTurn() ? <button onClick={() => this.nextTurnHandler()}>End Turn</button> : null;
 
     if (this.props.gameState.draftCompleted) {
       return(<h1>The draft is over</h1>);
@@ -347,7 +410,14 @@ class Draft extends React.Component {
       <div>
         {title}
         <UpcomingDraftees draftState={this.props.draftState} players={this.props.players}/>
-        {nextButton}
+        <SelfPicks 
+          selfPicks={this.props.selfPicks}
+        />
+        <DraftPicker 
+          statesPerCandidate={this.generateStatesPerCandidate()}
+          submitPickHandler={(candidate, state) => this.props.submitPickHandler(candidate, state)}
+          isMyTurn={this.isMyTurn()}
+        />
       </div>
     );
   }
@@ -366,6 +436,8 @@ class UpcomingDraftees extends React.Component {
             display:"flex", 
             overflow:"auto",
             border:"1px solid black",
+            margin:"0 auto",
+            textAlign:"center"
           }}
           key={position}
         >
@@ -385,6 +457,90 @@ class UpcomingDraftees extends React.Component {
   }
 }
 
+class SelfPicks extends React.Component {
+
+  render() {
+    const picks = [];
+    if (this.props.selfPicks !== null) {
+      let counter = 1;
+      for (let state in this.props.selfPicks) {
+        picks.push(<tr key={state}><td><b>{counter}: </b> {state} : {this.props.selfPicks[state]}</td></tr>);
+        counter += 1;
+      }
+    }
+
+    return (
+      <div className="BoundingBox">
+        <h2>Your picks:</h2>
+        <table>
+        {picks}
+        </table>
+      </div>
+    );
+  }
+}
+
+class DraftPicker extends React.Component {
+  constructor(props) {
+    super(props);
+
+    this.state = {
+      selectedCandidateIdx: 0,
+      selectedState: "", // This has to be the actual text because indexing on non-complete state lists will result in incorrect names
+    }
+  }
+
+  candidateName(idx) {
+    return (primaryData.candidates[idx]);
+  }
+
+  submitPick() {
+    this.props.submitPick(this.candidateName(this.state.selectedCandidateIdx), this.state.selectedState);
+  }
+  
+  render() {
+    let candidates = [];
+    let states = [];
+    
+    for (let candidateIdx in primaryData.candidates) {
+      const cssClass = candidateIdx === this.state.selectedCandidateIdx ? "selectedCandidate" : "";
+      candidates.push(
+        <tr className={cssClass} key={candidateIdx} onClick={() => this.setState({selectedCandidateIdx: candidateIdx})}>
+          <td>{this.candidateName(candidateIdx)}</td>
+        </tr>
+      );
+    }
+    for (let state in this.props.statesPerCandidate[this.state.selectedCandidateIdx]) {
+      let stateName = this.props.statesPerCandidate[this.state.selectedCandidateIdx][state];
+      states.push(
+        <tr key={stateName} onClick={() => this.setState({selectedState: stateName})}>
+          <td>{stateName}</td>
+        </tr>
+      );
+    }
+
+    let submitButton = this.props.isMyTurn
+      ? <button onClick={() => this.props.submitPickHandler(this.candidateName(this.state.selectedCandidateIdx), this.state.selectedState)}>Submit</button>
+      : null;
+
+    return (
+      <div className="BoundingBox">
+        <h2>Available Picks</h2>
+        <table style={{display:"inline-block"}}>
+          <tbody>
+            {candidates}
+          </tbody>  
+        </table>
+        <table style={{float:"right"}}>
+          <tbody>
+            {states}
+          </tbody>
+        </table>
+        {submitButton}
+      </div>
+    );
+  }
+}
 class App extends React.Component {
   constructor(props) {
     super(props);
@@ -396,6 +552,7 @@ class App extends React.Component {
     this.playerSelectedHandler = this.playerSelectedHandler.bind(this);
     this.startDraft = this.startDraft.bind(this);
     this.nextTurnHandler = this.nextTurnHandler.bind(this);
+    this.submitPick = this.submitPick.bind(this);
 
     this.state = {
       gameId: "",
@@ -410,6 +567,8 @@ class App extends React.Component {
       draftState: {...starterDraftState},
       selfIdx: "",
       selfName: "",
+      selfPicks: {},
+      availablePicks: {},
     }
   }
 
@@ -500,6 +659,10 @@ class App extends React.Component {
     // This is how the dbDraftConnectionStarted flag gets set locally.
     // It's technically a race condition, but since the order is random, it doesn't actually matter.
 
+    this.state.firebaseManager.initializeAndSubscribeToDraftObjects(this.state.gameId, this.state.selfIdx, 
+      (newAvailablePicks => this.setState({availablePicks: newAvailablePicks})),
+      (newSelfPicks => this.setState({selfPicks: newSelfPicks}))
+    );
     this.state.firebaseManager.startDraft(this.state.gameId, this.state.players.length);
     this.state.firebaseManager.subscribeToDraftState(this.state.gameId, (newDraftState) => {
       this.setState({draftState: {...newDraftState}, dbDraftConnectionStarted: true});
@@ -518,6 +681,10 @@ class App extends React.Component {
 
   nextTurnHandler() {
     this.state.firebaseManager.nextTurn(this.state.gameId, this.state.draftState.currentDraftPosition + 1);
+  }
+
+  submitPick(candidate, state) {
+    this.state.firebaseManager.submitPick(this.state.gameId, this.state.selfIdx, candidate, state, () => this.nextTurnHandler());
   }
 
   render() {
@@ -539,7 +706,10 @@ class App extends React.Component {
             gameState={this.state.gameState}
             players={this.state.players}
             selfIdx={this.state.selfIdx}
+            availablePicks={this.state.availablePicks}
+            selfPicks={this.state.selfPicks}
             nextTurnHandler={() => this.nextTurnHandler()}
+            submitPickHandler={(candidate, state) => this.submitPick(candidate, state)}
           />
         : <PreDraft
             gameId={this.state.gameId}
@@ -550,6 +720,7 @@ class App extends React.Component {
             players={this.state.players}
           />;
     }
+
     return (
       <div className="App">
         <div className="Header">

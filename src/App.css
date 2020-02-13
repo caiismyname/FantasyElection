@@ -54,3 +54,24 @@ button {
   border-color: #014C7F;
   cursor: grab;
 }
+
+table, td {
+  border: 1px solid black;
+  border-collapse: collapse;
+  text-align: left;
+  cursor: grab;
+}
+
+td {
+  padding: 1vh 1.5vw;
+}
+
+tr:hover {
+  background-color: #3386FF;
+  color: white;
+}
+
+.selectedCandidate {
+  background-color: #3386FF;
+  color: white;
+}
