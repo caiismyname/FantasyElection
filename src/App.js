@@ -169,18 +169,18 @@ class FirebaseManager {
       .on("value", snapshot => playerPicksCallback(snapshot.val()));
   }
 
-  submitPick(gameId, playerIdx, candidate, state, callback) {
-    const queryPath = "/games/" + gameId + "/availablePicks/" + state + "/" + candidate;
-    Firebase.database().ref(queryPath).once('value')
+  submitPick(gameId, playerIdx, candidate, state, newSelfPicks, callback) {
+    const availablePicksQueryPath = "/games/" + gameId + "/availablePicks/" + state + "/" + candidate;
+    Firebase.database().ref(availablePicksQueryPath).once('value')
       .then((snapshot) => {
         if (snapshot.exists()) {
           Firebase.database()
-            .ref(queryPath)
+            .ref(availablePicksQueryPath)
             .remove();
 
           Firebase.database()
-            .ref("/games/" + gameId + "/picksPerPlayer/" + playerIdx + "/" + state)
-            .set(candidate);
+            .ref("/games/" + gameId + "/picksPerPlayer/" + playerIdx)
+            .set(newSelfPicks);
 
           callback();
         };
@@ -463,17 +463,22 @@ class SelfPicks extends React.Component {
     const picks = [];
     if (this.props.selfPicks !== null) {
       let counter = 1;
-      for (let state in this.props.selfPicks) {
-        picks.push(<tr key={state}><td><b>{counter}: </b> {state} : {this.props.selfPicks[state]}</td></tr>);
+      for (let pickIdx in this.props.selfPicks) {
+        const pick = this.props.selfPicks[pickIdx];
+        picks.push(<tr key={pick.state}><td><b>{counter}: </b> {pick.state} : {pick.candidate}</td></tr>);
         counter += 1;
       }
+    } else {
+      return (null);
     }
 
     return (
       <div className="BoundingBox">
         <h2>Your picks:</h2>
         <table>
-        {picks}
+          <tbody>
+            {picks}
+          </tbody>
         </table>
       </div>
     );
@@ -503,7 +508,7 @@ class DraftPicker extends React.Component {
     let states = [];
     
     for (let candidateIdx in primaryData.candidates) {
-      const cssClass = candidateIdx === this.state.selectedCandidateIdx ? "selectedCandidate" : "";
+      const cssClass = candidateIdx === this.state.selectedCandidateIdx ? "selectedItem" : "";
       candidates.push(
         <tr className={cssClass} key={candidateIdx} onClick={() => this.setState({selectedCandidateIdx: candidateIdx})}>
           <td>{this.candidateName(candidateIdx)}</td>
@@ -511,21 +516,28 @@ class DraftPicker extends React.Component {
       );
     }
     for (let state in this.props.statesPerCandidate[this.state.selectedCandidateIdx]) {
-      let stateName = this.props.statesPerCandidate[this.state.selectedCandidateIdx][state];
+      const stateName = this.props.statesPerCandidate[this.state.selectedCandidateIdx][state];
+      const cssClass = stateName === this.state.selectedState ? "selectedItem" : "";
       states.push(
-        <tr key={stateName} onClick={() => this.setState({selectedState: stateName})}>
+        <tr className={cssClass} key={stateName} onClick={() => this.setState({selectedState: stateName})}>
           <td>{stateName}</td>
         </tr>
       );
     }
 
-    let submitButton = this.props.isMyTurn
+    const submitButton = this.props.isMyTurn
       ? <button onClick={() => this.props.submitPickHandler(this.candidateName(this.state.selectedCandidateIdx), this.state.selectedState)}>Submit</button>
       : null;
+
+    // blank text for current pick if no selection has been made, proxied by if a state has been selected
+    const currentPick = this.state.selectedState === ""
+      ? ""
+      : this.candidateName(this.state.selectedCandidateIdx) + " : " + this.state.selectedState;
 
     return (
       <div className="BoundingBox">
         <h2>Available Picks</h2>
+        <h3>{currentPick}</h3>
         <table style={{display:"inline-block"}}>
           <tbody>
             {candidates}
@@ -567,7 +579,7 @@ class App extends React.Component {
       draftState: {...starterDraftState},
       selfIdx: "",
       selfName: "",
-      selfPicks: {},
+      selfPicks: [], // self picks are ordered
       availablePicks: {},
     }
   }
@@ -684,7 +696,9 @@ class App extends React.Component {
   }
 
   submitPick(candidate, state) {
-    this.state.firebaseManager.submitPick(this.state.gameId, this.state.selfIdx, candidate, state, () => this.nextTurnHandler());
+    const newSelfPicks = this.state.selfPicks === null ? [] : this.state.selfPicks;
+    newSelfPicks.push({"candidate": candidate, "state": state}); // key is using `state` as a variable, not putting it in a list
+    this.state.firebaseManager.submitPick(this.state.gameId, this.state.selfIdx, candidate, state, newSelfPicks, () => this.nextTurnHandler());
   }
 
   render() {
