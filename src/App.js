@@ -200,6 +200,7 @@ class OnboardingPage extends React.Component {
             players={this.props.players}
             addNewPlayerHandler={() => this.props.addNewPlayerHandler()}
             changePlayerNameHandler={(idx, value) => this.props.changePlayerNameHandler(idx, value)}
+            deletePlayerHandler={(idx) => this.props.deletePlayerHandler(idx)}
           />
           <div style={{height:"30px"}}></div>
           <button 
@@ -220,22 +221,21 @@ class OnboardingPage extends React.Component {
 }
 
 class PlayerEntry extends React.Component {
-  constructor(props) {
-    super(props);
-  }
-
   render() {
     const playerFields = [];
 
     for (let playerIdx in this.props.players) {
       const field = 
-        <textarea 
-          style={{border: "1px solid black", width:"100%", fontSize:"1.5vmin", height:"2vmin", resize:"none"}}
-          value={this.props.players[playerIdx]}
-          onChange={event => {this.props.changePlayerNameHandler(playerIdx, event.target.value)}}
-          key={playerIdx}
-          placeholder={"Player " + (Number(playerIdx) + 1)}
-        />;
+        <div>
+          <textarea 
+            style={{border: "1px solid black", width:"95%", fontSize:"1.5vmin", height:"2vmin", resize:"none"}}
+            value={this.props.players[playerIdx]}
+            onChange={event => {this.props.changePlayerNameHandler(playerIdx, event.target.value)}}
+            key={playerIdx}
+            placeholder={"Player " + (Number(playerIdx) + 1)}
+          />
+          <span style={{float:"right", cursor:"grab"}} onClick={() => this.props.deletePlayerHandler(playerIdx)}>X</span>
+        </div>;
       playerFields.push(field);
     }
 
@@ -572,6 +572,7 @@ class App extends React.Component {
 
     this.addNewPlayer = this.addNewPlayer.bind(this);
     this.changePlayerName = this.changePlayerName.bind(this);
+    this.deletePlayer = this.deletePlayer.bind(this);
     this.createNewGame = this.createNewGame.bind(this);
     this.checkAndSetGameId = this.checkAndSetGameId.bind(this);
     this.playerSelectedHandler = this.playerSelectedHandler.bind(this);
@@ -647,8 +648,20 @@ class App extends React.Component {
     this.setState({players: newPlayers});
   }
 
+  deletePlayer(idx) {
+    const newPlayers = {...this.state.players};
+    delete newPlayers[idx];
+    this.setState({players: newPlayers});
+  }
+
   createNewGame() {
-    const gameId = this.state.firebaseManager.createNewGame(this.state.players);
+    const cleanedPlayers = {...this.state.players}; // removed empty entries
+    for (let playerIdx in cleanedPlayers) {
+      if (cleanedPlayers[playerIdx] === "") {
+        delete cleanedPlayers[playerIdx];
+      }
+    }
+    const gameId = this.state.firebaseManager.createNewGame(cleanedPlayers);
     this.setState({gameId: gameId});
   }
 
@@ -722,6 +735,7 @@ class App extends React.Component {
         <OnboardingPage 
           addNewPlayerHandler={() => this.addNewPlayer()}
           changePlayerNameHandler={(idx, value) => this.changePlayerName(idx, value)}
+          deletePlayerHandler={(idx) => this.deletePlayer(idx)}
           createNewGameHandler={() => this.createNewGame()}
           joinGameHandler={(gameId) => this.checkAndSetGameId(gameId)}
           players={this.state.players}
