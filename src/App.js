@@ -335,6 +335,8 @@ class PreDraft extends React.Component {
       return (
         <div>
           <h1> Welcome to the draft, {this.props.players[this.props.selfIdx]}</h1>
+          <h3>Your Game ID is <span style={{backgroundColor:"#F7FAFC", padding: "5px"}}>{this.props.gameId}</span></h3>
+          <h3>Share it with your friends so they can join the draft.</h3>
           <div className="BoundingBox">
             <h3>When you're ready, click the button below to enter the draft. Once you enter, you cannot exit.</h3>
             <button onClick={() => this.props.playerReadyHandler()}>Ready</button>
@@ -355,6 +357,8 @@ class PreDraft extends React.Component {
         return (
           <div>
             <h1>{this.props.players[this.props.selfIdx]}, you have entered the draft.</h1>
+            <h3>Your Game ID is <span style={{backgroundColor:"#F7FAFC", padding: "5px"}}>{this.props.gameId}</span></h3>
+            <h3>Share it with your friends so they can join the draft.</h3>
             <div className="BoundingBox">
               <h3>The draft will start once all players have joined.</h3>
               <h3>Still missing:</h3>
@@ -403,7 +407,15 @@ class Draft extends React.Component {
     let title = this.isMyTurn() ? <h1>It your turn!</h1> : <h1>It {this.props.players[this.props.draftState.draftOrder[this.props.draftState.currentDraftPosition]]} turn</h1>;
 
     if (this.props.gameState.draftCompleted) {
-      return(<h1>The draft is over</h1>);
+      return(
+        <div>
+          <h1>The draft is over. Thanks for playing!</h1>
+          <SelfPicks 
+            selfPicks={this.props.selfPicks}
+          />
+        </div>
+        
+      );
     }
 
     return(
@@ -553,6 +565,7 @@ class DraftPicker extends React.Component {
     );
   }
 }
+
 class App extends React.Component {
   constructor(props) {
     super(props);
