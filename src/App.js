@@ -17,7 +17,7 @@ const starterDraftState = {
   currentDraftPosition: 0,
 }
 
-const draftRounds = 2; // must be even for snake
+const draftRounds = 10; // must be even for snake
 
 function shuffle(array) {
   var currentIndex = array.length, temporaryValue, randomIndex;
@@ -404,7 +404,7 @@ class Draft extends React.Component {
   }
 
   render() {
-    let title = this.isMyTurn() ? <h1>It your turn!</h1> : <h1>It {this.props.players[this.props.draftState.draftOrder[this.props.draftState.currentDraftPosition]]} turn</h1>;
+    let title = this.isMyTurn() ? <h1>It's your turn!</h1> : <h1>It's {this.props.players[this.props.draftState.draftOrder[this.props.draftState.currentDraftPosition]]} turn</h1>;
 
     if (this.props.gameState.draftCompleted) {
       return(
@@ -444,16 +444,18 @@ class UpcomingDraftees extends React.Component {
       const element = 
         <div 
           style={{
-            flex:"1", 
+            flex:"0 0 120px", 
             display:"flex", 
             overflow:"auto",
             border:"1px solid black",
-            margin:"0 auto",
-            textAlign:"center"
+            padding: "1vh",
+            justifyContent:"center", 
+            alignItems: "center",
+            height: "3vh",
           }}
           key={position}
         >
-          {this.props.players[draftOrder[position]]}
+          {position + 1}. {this.props.players[draftOrder[position]]}
         </div>;
 
       upcoming.push(element);
@@ -461,7 +463,7 @@ class UpcomingDraftees extends React.Component {
 
     return(
       <div
-        style={{display:"flex", "flexDirection":"row", "minHeight": "50px"}}
+        style={{display:"flex", "flexDirection":"row", overflowX: "auto", "minHeight": "50px", justifyContent:"left", alignItems: "center",}}
       >
         {upcoming}
       </div>
