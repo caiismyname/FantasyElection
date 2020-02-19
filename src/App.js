@@ -524,44 +524,45 @@ class DraftPicker extends React.Component {
     for (let candidateIdx in primaryData.candidates) {
       const cssClass = candidateIdx === this.state.selectedCandidateIdx ? "selectedItem" : "";
       candidates.push(
-        <tr className={cssClass} key={candidateIdx} onClick={() => this.setState({selectedCandidateIdx: candidateIdx})}>
-          <td>{this.candidateName(candidateIdx)}</td>
-        </tr>
+        <div className={cssClass + " draftPickerElement"} key={candidateIdx} onClick={() => this.setState({selectedCandidateIdx: candidateIdx})}>
+          {this.candidateName(candidateIdx)}
+        </div>
       );
     }
     for (let state in this.props.statesPerCandidate[this.state.selectedCandidateIdx]) {
       const stateName = this.props.statesPerCandidate[this.state.selectedCandidateIdx][state];
       const cssClass = stateName === this.state.selectedState ? "selectedItem" : "";
       states.push(
-        <tr className={cssClass} key={stateName} onClick={() => this.setState({selectedState: stateName})}>
-          <td>{stateName}</td>
-        </tr>
+        <div className={cssClass + " draftPickerElement"} key={stateName} onClick={() => this.setState({selectedState: stateName})}>
+          {stateName}
+        </div>
       );
     }
 
-    const submitButton = this.props.isMyTurn
-      ? <button onClick={() => this.props.submitPickHandler(this.candidateName(this.state.selectedCandidateIdx), this.state.selectedState)}>Submit</button>
-      : null;
+    let submitButton;
+    if (this.props.isMyTurn && this.state.selectedState !== "") {
+        submitButton = <button onClick={() => this.props.submitPickHandler(this.candidateName(this.state.selectedCandidateIdx), this.state.selectedState)}>Submit</button> 
+    } else {
+      submitButton = null;
+    }
 
     // blank text for current pick if no selection has been made, proxied by if a state has been selected
     const currentPick = this.state.selectedState === ""
-      ? ""
+      ? "--- : ---"
       : this.candidateName(this.state.selectedCandidateIdx) + " : " + this.state.selectedState;
 
     return (
       <div className="BoundingBox">
         <h2>Available Picks</h2>
         <h3>{currentPick}</h3>
-        <table style={{display:"inline-block"}}>
-          <tbody>
+        <div style={{display: "flex", flexDirection: "row"}}>
+          <div className="draftPickerContainer" style={{flexDirection: "column"}}>
             {candidates}
-          </tbody>  
-        </table>
-        <table style={{float:"right"}}>
-          <tbody>
+          </div>
+          <div className="draftPickerContainer">
             {states}
-          </tbody>
-        </table>
+          </div>
+        </div>
         {submitButton}
       </div>
     );

@@ -36,7 +36,8 @@
 .BoundingBox {
   background-color: #F5F6F8;
   padding: 5vh 10vw;
-  margin-bottom: 20px;
+  margin-bottom: 1vh;
+  margin-top: 1vh;
   font-size: calc(10px + 1vmin);
 }
 
@@ -74,4 +75,20 @@ tr:hover {
 .selectedItem {
   background-color: #3386FF;
   color: white;
+}
+
+.draftPickerElement {
+  border: 1px solid black;
+  cursor: grab;
+  padding: 1vh;
+  text-align: left;
+}
+
+.draftPickerContainer {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  float: right;
+  margin-bottom: 2vh;
+  margin-right: 1vw;
 }
