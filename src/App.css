@@ -38,7 +38,7 @@
   padding: 3vh 5vw;
   margin-bottom: 1vh;
   margin-top: 1vh;
-  font-size: calc(10px + 1vmin);
+  font-size: calc(8px + 1vmin);
 }
 
 h1 {
@@ -88,7 +88,6 @@ tr:hover {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
-  float: right;
   margin-bottom: 2vh;
   margin-right: 1vw;
 }
@@ -98,4 +97,19 @@ tr:hover {
   margin: .1vh;
   border: 3px solid black;
   font-weight: bold;
+}
+
+.picksDisplayContainer {
+  text-align: left;
+  flex-grow: 1;
+  max-width: 50%;
+  max-height: 24vh;
+  overflow: auto;
+}
+
+.picksDisplayElement {
+  border: 1px solid black;
+  padding: .5vh .5vw;
+  text-align: left;
+  width: 100%;
 }

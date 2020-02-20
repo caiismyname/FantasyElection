@@ -402,7 +402,48 @@ class Draft extends React.Component {
   }
 
   generateFullPicksList() {
+    const fullList = [];
+    const currentPickIdxPerPlayer = {}; // Keep track of which of the player's picks we're on
 
+    for (let playerIdx in this.props.players) {
+      currentPickIdxPerPlayer[playerIdx] = 0;
+    }
+
+    const draftState = this.props.draftState;
+    for (let pickNum in draftState.draftOrder) {
+      // If we reach the current pick, there are no more picks to display
+      if (pickNum >= draftState.currentDraftPosition) {
+        break;
+      }
+
+      const playerIdx = draftState.draftOrder[pickNum];
+
+      // If we reach a player with no picks, we've reached the end of the list
+      if (!(playerIdx in draftState.picksPerPlayer)) {
+        break;
+      }
+
+      const playerName = this.props.players[playerIdx];
+      const pick = {...draftState.picksPerPlayer[playerIdx][currentPickIdxPerPlayer[playerIdx]]};
+      pick.prefix = playerName;
+
+      fullList.push(pick);
+      currentPickIdxPerPlayer[playerIdx] = currentPickIdxPerPlayer[playerIdx] + 1;
+    }
+
+    return (fullList);
+  }
+
+  generateSelfPicks() {
+    if (this.props.draftState.picksPerPlayer === undefined) {
+      return [];
+    } else {
+      if (!(this.props.selfIdx in this.props.draftState.picksPerPlayer)) {
+        return [];
+      } else {
+        return this.props.draftState.picksPerPlayer[this.props.selfIdx];
+      }
+    }
   }
 
   render() {
@@ -412,23 +453,12 @@ class Draft extends React.Component {
       return(
         <div>
           <h1>The draft is over. Thanks for playing!</h1>
-          <SelfPicks 
-            selfPicks={this.props.draftState.selfPicks}
+          <PicksDisplay
+            picks={this.props.draftState.selfPicks}
+            titleText={"Your picks"}
           />
         </div>
-        
       );
-    }
-
-    let selfPicks;
-    if (this.props.draftState.picksPerPlayer === undefined) {
-      selfPicks = [];
-    } else {
-      if (!(this.props.selfIdx in this.props.draftState.picksPerPlayer)) {
-        selfPicks = [];
-      } else {
-        selfPicks = this.props.draftState.picksPerPlayer[this.props.selfIdx];
-      }
     }
 
     return(
@@ -439,9 +469,16 @@ class Draft extends React.Component {
           draftOrder={this.props.draftState.draftOrder}
           players={this.props.players}
         />
-        <SelfPicks 
-          selfPicks={selfPicks}
-        />
+        <div className="BoundingBox" style={{display: "flex", flexDirection: "row"}}>
+          <PicksDisplay 
+            picks={this.generateSelfPicks()}
+            titleText="Your picks"
+          />
+          <PicksDisplay 
+            picks={this.generateFullPicksList()}
+            titleText="All picks"
+          />
+        </div>
         <DraftPicker 
           statesPerCandidate={this.generateStatesPerCandidate()}
           submitPickHandler={(candidate, state) => this.props.submitPickHandler(candidate, state)}
@@ -487,15 +524,16 @@ class UpcomingDraftees extends React.Component {
   }
 }
 
-class SelfPicks extends React.Component {
+class PicksDisplay extends React.Component {
 
   render() {
     const picks = [];
-    if (this.props.selfPicks !== null) {
+    if (this.props.picks !== []) {
       let counter = 1;
-      for (let pickIdx in this.props.selfPicks) {
-        const pick = this.props.selfPicks[pickIdx];
-        picks.push(<tr key={pick.state}><td><b>{counter}: </b> {pick.state} : {pick.candidate}</td></tr>);
+      for (let pickIdx in this.props.picks) {
+        const pick = this.props.picks[pickIdx];
+        const prefix = "prefix" in this.props.picks[pickIdx] ? this.props.picks[pickIdx].prefix : "";
+        picks.push(<div className="picksDisplayElement" key={pick.state}><b>{counter}. {prefix} </b> {pick.state} : {pick.candidate}</div>);
         counter += 1;
       }
     } else {
@@ -503,13 +541,11 @@ class SelfPicks extends React.Component {
     }
 
     return (
-      <div className="BoundingBox">
-        <h2>Your picks:</h2>
-        <table>
-          <tbody>
-            {picks}
-          </tbody>
-        </table>
+      <div className="picksDisplayContainer">
+        <h2>{this.props.titleText}</h2>
+        <div className="draftPickerContainer">
+          {picks}
+        </div>
       </div>
     );
   }
@@ -581,7 +617,7 @@ class DraftPicker extends React.Component {
           <div className="draftPickerContainer" style={{flexDirection: "column"}}>
             {candidates}
           </div>
-          <div className="draftPickerContainer">
+          <div className="draftPickerContainer" style={{float: "right"}}>
             {states}
           </div>
         </div>
@@ -738,8 +774,20 @@ class App extends React.Component {
     this.state.firebaseManager.nextTurn(this.state.gameId, this.state.draftState.currentDraftPosition + 1);
   }
 
+  generateSelfPicks() {
+    if (this.state.draftState.picksPerPlayer === undefined) {
+      return [];
+    } else {
+      if (!(this.state.selfIdx in this.state.draftState.picksPerPlayer)) {
+        return [];
+      } else {
+        return this.state.draftState.picksPerPlayer[this.state.selfIdx];
+      }
+    }
+  }
+
   submitPick(candidate, state) {
-    const newSelfPicks = this.state.draftState.selfPicks === undefined ? [] : this.state.draftState.selfPicks;
+    const newSelfPicks = this.generateSelfPicks();
     newSelfPicks.push({"candidate": candidate, "state": state}); // key is using `state` as a variable, not putting it in a list
     this.state.firebaseManager.submitPick(this.state.gameId, this.state.selfIdx, candidate, state, newSelfPicks, () => this.nextTurnHandler());
   }
