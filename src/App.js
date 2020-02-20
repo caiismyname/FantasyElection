@@ -7,7 +7,7 @@ require('firebase/database');
 const uuidv4 = require('uuid/v4');
 
 const starterGameState = {
-  onlinePlayers: {},
+  onlinePlayers: {}, // Online status is so that users can't double select a player name
   readyPlayers: {},
   draftCompleted: false, // This is not meant to control the draft. It is used for checks incase the game is visited after the draft is completed
 }

@@ -1,0 +1,11 @@
+#!/bin/sh
+
+echo "Switching to branch master"
+git checkout master
+
+echo "Building app"
+npm run build
+
+echo "Deploying files to server"
+rsync -avP build/ root@45.56.81.188:/var/www/fantasyelections.org/
+echo "Deployment complete"
