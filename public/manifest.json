@@ -1,6 +1,6 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "Fantasy Elections",
+  "name": "Fantasy Elections -- 2020 Democratic Primary",
   "icons": [
     {
       "src": "favicon.ico",
