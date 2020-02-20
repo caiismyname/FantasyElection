@@ -13,8 +13,10 @@ const starterGameState = {
 }
 
 const starterDraftState = {
-  draftOrder: {}, // FB doesn't store lists natively.
+  draftOrder: [],
   currentDraftPosition: 0,
+  pickerPerPlayer: {}, // Individual clients should always only use the sublist associated with their playerIdx
+  availablePicks: {},
 }
 
 const draftRounds = 10; // must be even for snake
@@ -134,18 +136,6 @@ class FirebaseManager {
   }
 
   subscribeToDraftState(gameId, callback) {
-    Firebase.database().ref("/games/" + gameId + "/draftState").on('value', (snapshot) => {
-      callback(snapshot.val());
-    })
-  }
-
-  nextTurn(gameId, nextPosition) {
-    Firebase.database()
-      .ref("/games/" + gameId + "/draftState/currentDraftPosition")
-      .set(nextPosition);
-  }
-
-  initializeAndSubscribeToDraftObjects(gameId, playerIdx, availablePicksCallback, playerPicksCallback) {
     const blankPicks = {};
     for (let stateIdx in primaryData.states) {
       const state = primaryData.states[stateIdx];
@@ -157,20 +147,22 @@ class FirebaseManager {
     }
 
     Firebase.database()
-      .ref("/games/" + gameId + "/availablePicks")
+      .ref("/games/" + gameId + "/draftState/availablePicks")
       .set({...blankPicks});
 
-    Firebase.database()
-      .ref("games/" + gameId + "/availablePicks")
-      .on("value", snapshot => availablePicksCallback(snapshot.val()));
+    Firebase.database().ref("/games/" + gameId + "/draftState").on('value', (snapshot) => {
+      callback(snapshot.val());
+    })
+  }
 
+  nextTurn(gameId, nextPosition) {
     Firebase.database()
-      .ref("games/" + gameId + "/picksPerPlayer/" + playerIdx)
-      .on("value", snapshot => playerPicksCallback(snapshot.val()));
+      .ref("/games/" + gameId + "/draftState/currentDraftPosition")
+      .set(nextPosition);
   }
 
   submitPick(gameId, playerIdx, candidate, state, newSelfPicks, callback) {
-    const availablePicksQueryPath = "/games/" + gameId + "/availablePicks/" + state + "/" + candidate;
+    const availablePicksQueryPath = "/games/" + gameId + "/draftState/availablePicks/" + state + "/" + candidate;
     Firebase.database().ref(availablePicksQueryPath).once('value')
       .then((snapshot) => {
         if (snapshot.exists()) {
@@ -179,13 +171,19 @@ class FirebaseManager {
             .remove();
 
           Firebase.database()
-            .ref("/games/" + gameId + "/picksPerPlayer/" + playerIdx)
+            .ref("/games/" + gameId + "/draftState/picksPerPlayer/" + playerIdx)
             .set(newSelfPicks);
 
           callback();
         };
       });
     
+  }
+
+  generateFullPicksList(gameId, callback) {
+    Firebase.database()
+      .ref("/games/" + gameId + "/pickerPerPlayer").once('value')
+      .then((snapshot) => callback(snapshot.val()));
   }
 }
 
@@ -389,8 +387,8 @@ class Draft extends React.Component {
     for (let candidateIdx in primaryData.candidates) {
       statesPerCandidate[candidateIdx] = [];
 
-      for (let stateIdx in this.props.availablePicks) {
-        if (this.candidateName(candidateIdx) in this.props.availablePicks[stateIdx]) {
+      for (let stateIdx in this.props.draftState.availablePicks) {
+        if (this.candidateName(candidateIdx) in this.props.draftState.availablePicks[stateIdx]) {
           statesPerCandidate[candidateIdx].push(stateIdx);
         }
       }
@@ -403,6 +401,10 @@ class Draft extends React.Component {
     return (primaryData.candidates[idx]);
   }
 
+  generateFullPicksList() {
+
+  }
+
   render() {
     let title = this.isMyTurn() ? <h1>It's your turn!</h1> : <h1>It's {this.props.players[this.props.draftState.draftOrder[this.props.draftState.currentDraftPosition]]} turn</h1>;
 
@@ -411,19 +413,34 @@ class Draft extends React.Component {
         <div>
           <h1>The draft is over. Thanks for playing!</h1>
           <SelfPicks 
-            selfPicks={this.props.selfPicks}
+            selfPicks={this.props.draftState.selfPicks}
           />
         </div>
         
       );
     }
 
+    let selfPicks;
+    if (this.props.draftState.picksPerPlayer === undefined) {
+      selfPicks = [];
+    } else {
+      if (!(this.props.selfIdx in this.props.draftState.picksPerPlayer)) {
+        selfPicks = [];
+      } else {
+        selfPicks = this.props.draftState.picksPerPlayer[this.props.selfIdx];
+      }
+    }
+
     return(
       <div>
         {title}
-        <UpcomingDraftees draftState={this.props.draftState} players={this.props.players}/>
+        <UpcomingDraftees 
+          currentDraftPosition={this.props.draftState.currentDraftPosition}
+          draftOrder={this.props.draftState.draftOrder}
+          players={this.props.players}
+        />
         <SelfPicks 
-          selfPicks={this.props.selfPicks}
+          selfPicks={selfPicks}
         />
         <DraftPicker 
           statesPerCandidate={this.generateStatesPerCandidate()}
@@ -438,9 +455,8 @@ class Draft extends React.Component {
 class UpcomingDraftees extends React.Component {
 
   render() {
-    const draftOrder = this.props.draftState.draftOrder;
     let upcoming = [];
-    for (let position = this.props.draftState.currentDraftPosition; position < draftOrder.length; position++) {
+    for (let position = this.props.currentDraftPosition; position < this.props.draftOrder.length; position++) {
       const element = 
         <div 
           style={{
@@ -455,7 +471,7 @@ class UpcomingDraftees extends React.Component {
           }}
           key={position}
         >
-          {position + 1}. {this.props.players[draftOrder[position]]}
+          {position + 1}. {this.props.players[this.props.draftOrder[position]]}
         </div>;
 
       upcoming.push(element);
@@ -602,8 +618,6 @@ class App extends React.Component {
       draftState: {...starterDraftState},
       selfIdx: "",
       selfName: "",
-      selfPicks: [], // self picks are ordered
-      availablePicks: {},
     }
   }
 
@@ -706,16 +720,10 @@ class App extends React.Component {
     // This is how the dbDraftConnectionStarted flag gets set locally.
     // It's technically a race condition, but since the order is random, it doesn't actually matter.
 
-    this.state.firebaseManager.initializeAndSubscribeToDraftObjects(this.state.gameId, this.state.selfIdx, 
-      (newAvailablePicks => this.setState({availablePicks: newAvailablePicks})),
-      (newSelfPicks => this.setState({selfPicks: newSelfPicks}))
-    );
     this.state.firebaseManager.startDraft(this.state.gameId, this.state.players.length);
     this.state.firebaseManager.subscribeToDraftState(this.state.gameId, (newDraftState) => {
       this.setState({draftState: {...newDraftState}, dbDraftConnectionStarted: true});
     });
-
-    // this.setState({dbDraftConnectionStarted: true});
   }
 
   endDraft() {
@@ -731,7 +739,7 @@ class App extends React.Component {
   }
 
   submitPick(candidate, state) {
-    const newSelfPicks = this.state.selfPicks === null ? [] : this.state.selfPicks;
+    const newSelfPicks = this.state.draftState.selfPicks === undefined ? [] : this.state.draftState.selfPicks;
     newSelfPicks.push({"candidate": candidate, "state": state}); // key is using `state` as a variable, not putting it in a list
     this.state.firebaseManager.submitPick(this.state.gameId, this.state.selfIdx, candidate, state, newSelfPicks, () => this.nextTurnHandler());
   }
@@ -756,8 +764,6 @@ class App extends React.Component {
             gameState={this.state.gameState}
             players={this.state.players}
             selfIdx={this.state.selfIdx}
-            availablePicks={this.state.availablePicks}
-            selfPicks={this.state.selfPicks}
             nextTurnHandler={() => this.nextTurnHandler()}
             submitPickHandler={(candidate, state) => this.submitPick(candidate, state)}
           />
