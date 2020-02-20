@@ -533,7 +533,7 @@ class DraftPicker extends React.Component {
       const stateName = this.props.statesPerCandidate[this.state.selectedCandidateIdx][state];
       const cssClass = stateName === this.state.selectedState ? "selectedItem" : "";
       states.push(
-        <div className={cssClass + " draftPickerElement"} key={stateName} onClick={() => this.setState({selectedState: stateName})}>
+        <div className={cssClass + " draftPickerElement stateElement"} key={stateName} onClick={() => this.setState({selectedState: stateName})}>
           {stateName}
         </div>
       );
@@ -551,10 +551,16 @@ class DraftPicker extends React.Component {
       ? "--- : ---"
       : this.candidateName(this.state.selectedCandidateIdx) + " : " + this.state.selectedState;
 
+    const delegateCount = this.state.selectedState === ""
+      ? ""
+      : "Delegates: " + primaryData.delegateCounts[this.state.selectedState];
+
+
     return (
       <div className="BoundingBox">
         <h2>Available Picks</h2>
         <h3>{currentPick}</h3>
+        <h4>{delegateCount}</h4>
         <div style={{display: "flex", flexDirection: "row"}}>
           <div className="draftPickerContainer" style={{flexDirection: "column"}}>
             {candidates}
@@ -622,7 +628,7 @@ class App extends React.Component {
     }
 
     // Once draft is started, watch for when the draft ends
-    if (this.draftHasStarted && !this.state.gameState.draftCompleted) {
+    if (this.draftHasStarted() && !this.state.gameState.draftCompleted) {
       if (this.state.draftState.currentDraftPosition === this.state.draftState.draftOrder.length) {
         this.endDraft();
       }

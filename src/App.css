@@ -92,3 +92,10 @@ tr:hover {
   margin-bottom: 2vh;
   margin-right: 1vw;
 }
+
+.stateElement {
+  padding: .5vh;
+  margin: .1vh;
+  border: 3px solid black;
+  font-weight: bold;
+}
