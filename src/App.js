@@ -447,7 +447,7 @@ class Draft extends React.Component {
   }
 
   render() {
-    let title = this.isMyTurn() ? <h1>It's your turn!</h1> : <h1>It's {this.props.players[this.props.draftState.draftOrder[this.props.draftState.currentDraftPosition]]} turn</h1>;
+    let title = this.isMyTurn() ? <h1>It's <u>your</u> turn!</h1> : <h1>It's <u>{this.props.players[this.props.draftState.draftOrder[this.props.draftState.currentDraftPosition]]}'s</u> turn</h1>;
 
     if (this.props.gameState.draftCompleted) {
       return(
