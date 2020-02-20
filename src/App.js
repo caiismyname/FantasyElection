@@ -464,6 +464,7 @@ class Draft extends React.Component {
     return(
       <div>
         {title}
+        {this.isMyTurn() ? <img src={require("./your_turn.png")} className="yourTurnImage"/> : null}
         <UpcomingDraftees 
           currentDraftPosition={this.props.draftState.currentDraftPosition}
           draftOrder={this.props.draftState.draftOrder}
@@ -604,7 +605,7 @@ class DraftPicker extends React.Component {
       : this.candidateName(this.state.selectedCandidateIdx) + " : " + this.state.selectedState;
 
     const delegateCount = this.state.selectedState === ""
-      ? ""
+      ? "Delegates: --"
       : "Delegates: " + primaryData.delegateCounts[this.state.selectedState];
 
 

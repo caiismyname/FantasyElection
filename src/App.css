@@ -113,3 +113,10 @@ tr:hover {
   text-align: left;
   width: 100%;
 }
+
+.yourTurnImage {
+  position: fixed;
+  top: 10px;
+  left: 0px;
+  width: 20vw;
+}
