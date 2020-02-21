@@ -617,8 +617,16 @@ class DraftPicker extends React.Component {
     return (
       <div className="BoundingBox">
         <h2>Available Picks</h2>
-        <h3>{currentPick}</h3>
-        <h4>{delegateCount}</h4>
+        <div style={{display:"flex", flexDirection: "row", paddingBottom: "1vh"}}>
+          <div style={{display:"flex", flexGrow:"1", maxWidth: "50%"}}>
+            <img src={require("./candidatePhotos/" + this.candidateName(this.state.selectedCandidateIdx) + ".jpg")} className="candidatePhoto"/>
+          </div>
+          <div style={{flexGrow:"1", maxWidth:"50%"}}>
+            <div><h3>{currentPick}</h3></div>
+            <div><h4>{delegateCount}</h4></div>
+          </div>
+        </div>
+        
         <div style={{display: "flex", flexDirection: "row"}}>
           <div className="draftPickerContainer" style={{flexDirection: "column"}}>
             {candidates}

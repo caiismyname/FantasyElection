@@ -120,3 +120,9 @@ tr:hover {
   left: 0px;
   width: 20vw;
 }
+
+.candidatePhoto {
+  width: 20vw;
+  height: 14vh;
+  object-fit: cover;
+}
