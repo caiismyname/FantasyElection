@@ -2,6 +2,7 @@ import React from 'react';
 import './App.css';
 import {apiKey, authDomain, databaseURL, projectId, storageBucket, appId, measurementId} from "./firebaseCredentials";
 import {primaryData} from "./democratic_primary_2020";
+import {BrowserRouter} from "react-router-dom";
 const Firebase = require('firebase/app');
 require('firebase/database');
 const uuidv4 = require('uuid/v4');
@@ -192,7 +193,11 @@ class OnboardingPage extends React.Component {
     return (
       <div>
         <h1>Welcome to Fantasy Elections</h1>
-        <h2><i>Democratic Primaries 2020</i></h2>
+        <div className="BoundingBox">
+          <h2><i>Democratic Primaries 2020</i></h2>
+          <p style={{textAlign: "left"}}>Play against your friends to draft the candidate+state pairs you think will win each Democratic primary. Then tally up the delegate counts from the states you picked correctly to see who's more in tune with the 2020 Democratic electorate.</p>
+        </div>
+        
         <div className="BoundingBox">
           <PlayerEntry 
             players={this.props.players}
